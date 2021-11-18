@@ -7,24 +7,23 @@ from kernel import linear_kernel, poly_kernel, gaussian_kernel
 
 
 class SVM:
-    def __init__(self, kernel='linear'):
+    def __init__(self, kernel='linear', **kernel_args):
         self.kernel = {'linear': linear_kernel,
                        'poly': poly_kernel,
                        'gaussian': gaussian_kernel}[kernel]
+        self.kernel_args = kernel_args
         self.weight = 0
         self.bias = 0
         self.opt_coef = np.array([])
-        self.initialized = False
+        self.optimized = False
 
-    def fit(self,
-            features: np.array,
-            labels: np.array):
+    def fit(self, features: np.array, labels: np.array):
         self.x = x = features
         self.y = y = labels
 
         n_samples, n_features = x.shape
         # generate necessary arguments for cvxopt qp solver
-        P = matrix([[y[i]*y[j]*self.kernel(x[i], x[j]) for j in range(n_samples)] for i in range(n_samples)])
+        P = matrix([[y[i]*y[j]*self.kernel(x[i], x[j], **self.kernel_args) for j in range(n_samples)] for i in range(n_samples)])
         q = matrix(-np.ones((n_samples, 1)))
         G = matrix(-np.eye(n_samples))
         h = matrix(np.zeros(n_samples))
@@ -41,12 +40,12 @@ class SVM:
         self.bias = (y[opt_coef > 1e-4] - np.dot(x[opt_coef > 1e-4], self.weight)).min()
 
         # update status
-        self.initialized = True
+        self.optimized = True
 
     def hypothesis(self, x):
-        if self.initialized:
+        if self.optimized:
             return (self.opt_coef * self.y) @ np.array(
-                        [self.kernel(xx, x) for xx in self.x]) + self.bias
+                        [self.kernel(xx, x, **self.kernel_args) for xx in self.x]) + self.bias
         else:
             print('Please train this model with some data first.')
             return None
@@ -69,15 +68,16 @@ class SVM:
 
 
 class SVC:
-    def __init__(self, C=1., kernel='linear'):
+    def __init__(self, C=1., kernel='linear', **kernel_args):
         self.C = C
         self.kernel = {'linear': linear_kernel,
                        'poly': poly_kernel,
                        'gaussian': gaussian_kernel}[kernel]
+        self.kernel_args = kernel_args
         self.weight = 0
         self.bias = 0
         self.opt_coef = np.array([])
-        self.initialized = False
+        self.optimized = False
 
     def fit(self,
             features: np.array,
@@ -88,7 +88,7 @@ class SVC:
         n, m = x.shape
 
         # define necessary arguments for cvxopt qp solver
-        P = matrix([[y[i] * y[j] * self.kernel(x[i], x[j]) for j in range(n)] for i in range(n)])
+        P = matrix([[y[i] * y[j] * self.kernel(x[i], x[j], **self.kernel_args) for j in range(n)] for i in range(n)])
         q = matrix(-np.ones((n, 1)))
         G = matrix(np.vstack((-np.eye(n), np.eye(n))))
         h = matrix(np.hstack((np.zeros(n), np.ones(n) * self.C)))
@@ -106,7 +106,7 @@ class SVC:
         self.weight = self._calc_weight()
         self.bias = self._calc_bias()
 
-        self.initialized = True
+        self.optimized = True
 
     def _calc_weight(self):
         return (self.opt_coef[self.sv_indices] * self.y[self.sv_indices]) @ self.support_vectors
@@ -116,15 +116,15 @@ class SVC:
         bias = np.Inf
         for i in np.where(cond)[0]:
             wx = self.opt_coef[self.sv_indices] * self.y[self.sv_indices] @ np.array(
-                [self.kernel(sv, self.x[i]) for sv in self.support_vectors])
+                [self.kernel(sv, self.x[i], **self.kernel_args) for sv in self.support_vectors])
             bias = min(bias, self.y[i] - wx)
 
         return bias
 
     def hypothesis(self, x):
-        if self.initialized:
+        if self.optimized:
             return (self.opt_coef[self.sv_indices] * self.y[self.sv_indices]) @ np.array(
-                [self.kernel(sv, x) for sv in self.support_vectors]) + self.bias
+                [self.kernel(sv, x, **self.kernel_args) for sv in self.support_vectors]) + self.bias
         else:
             print('Please train this model with some data first.')
             return None
